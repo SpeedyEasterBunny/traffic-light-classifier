@@ -15,8 +15,33 @@ Required packages:
  - Tensorflow-gpu/ Tensorflow models
  - Coco faster_rcnn_resnet101_coco_11_06_2017 model
 
+## Installation
+
+```
+pip install -r requirements.txt
+```
+
+Or create a virtual environment with Anaconda:
+
+```
+conda env create -f environment.yml
+```
+
 ## Example Use
 
+1. test tf_classifier
+
+```
+cd code
+python tf_classifier_test.py
+```
+
+2. main
+
+```
+cd code
+python main.py
+```
 
 ## Test Log
 
