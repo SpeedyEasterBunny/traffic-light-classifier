@@ -4,8 +4,6 @@ Created on Wed Feb 21 08:16:48 2018
 
 @author: Danilo Canivel
 """
-# from styx_msgs.msg import TrafficLight
-# import sys
 import time
 import cv2
 import numpy as np
@@ -15,15 +13,9 @@ from matplotlib import pyplot as plt
 from utils import label_map_util
 from utils import visualization_utils as vis_util
 
-# sys.path.append('../')
-
-from gcforest.gcforest import GCForest
-from gcforest.utils.config_utils import load_json
-
-DOWNLOAD_BASE = 'http://download.tensorflow.org/models/object_detection/'
-PATH_TO_CKPT_SIM = '../frozen_graphs/frozen_inference_graph_sim.pb'
-PATH_TO_CKPT_REAL = '../frozen_graphs/frozen_inference_graph_sim.pb'
-PATH_TO_LABELS = '../data/label_map.pbtxt'
+PATH_TO_CKPT_SIM = 'frozen_graphs/frozen_inference_graph_sim.pb'
+PATH_TO_CKPT_REAL = 'frozen_graphs/frozen_inference_graph_real.pb'
+PATH_TO_LABELS = './label_map.pbtxt'
 NUM_CLASSES = 4
 
 
@@ -31,15 +23,15 @@ class TLClassifier(object):
 
     def __init__(self, for_real=False):
         if for_real:
-            frozen_inf = PATH_TO_CKPT_SIM
-        else:
             frozen_inf = PATH_TO_CKPT_REAL
+        else:
+            frozen_inf = PATH_TO_CKPT_SIM
 
         # self.category_index = {1: {'id': 1, 'name': 'Red'},
         #                        2: {'id': 2, 'name': 'Yellow'},
         #                        3: {'id': 3, 'name': 'Green'},
         #                        4: {'id': 4, 'name': 'Unknown'}}
-
+        print(frozen_inf)
         self.label_map = label_map_util.load_labelmap(PATH_TO_LABELS)
         self.categories = label_map_util.convert_label_map_to_categories(self.label_map,
                                                                          max_num_classes=NUM_CLASSES,
@@ -73,6 +65,7 @@ class TLClassifier(object):
     def prepare_trafficlight(self, image):
         # print(image)
         if isinstance(image, str):
+            #image = cv2.imread(image)
             image = cv2.cvtColor(cv2.imread(image), cv2.COLOR_BGR2RGB)
         image = cv2.resize(image, (24, 72))
         return np.divide(image, 255).astype(np.float32)
@@ -95,25 +88,6 @@ class TLClassifier(object):
         # save augmented_images images into hard drive
         plt.savefig('../data/augmented_images/' + label_state + '_' + str(time.time()) + '.png')
 
-    def get_classification_batch_argmax(self, image_list):
-        """Determines the color of the traffic light in an batch of images
-
-        Args:
-            image_list (cv::Mat): list of images containing the traffic light
-
-        Returns:
-            int: argmax of the IDs of traffic light color (specified in styx_msgs/TrafficLight)
-            uint8 GREEN=2
-            uint8 YELLOW=1
-            uint8 RED=0
-
-        """
-        imgs_preps = [self.prepare_trafficlight(image=i) for i in image_list]
-        X_test = np.array(imgs_preps)
-        y_pred = self.gc.predict(X_test)
-        most_freq = np.bincount(y_pred).argmax()
-        return most_freq
-
     def get_category(self, categories, index):
         for category in categories:
             if category['id'] == index:
@@ -134,11 +108,6 @@ class TLClassifier(object):
 
         """
 
-        # img_prep = [self.prepare_trafficlight(image=image)]
-        # X_test = np.array(img_prep)
-        # y_pred = self.gc.predict(X_test)
-        # return y_pred[0]
-
         # reshape to [1, None, None, 3]
         image_np_expanded = np.expand_dims(image, axis=0)
         # Detect
@@ -147,28 +116,15 @@ class TLClassifier(object):
                                                         self.detection_scores,
                                                         self.detection_classes,
                                                         self.num_detections],
-                                                       feed_dict={self.image_tensor: image_np_expanded})
+                                                        feed_dict={self.image_tensor: image_np_expanded})
 
-        print("Detection ms = %s", (time.time() - start_time) * 1000.0)
+        print("Detection ms = ", (time.time() - start_time) * 1000.0)
 
         start_time = time.time()
 
         # state = self.detect_color(image, np.squeeze(boxes), np.squeeze(scores), np.squeeze(classes).astype(np.int32))
 
         print("Classifier ms = %s", (time.time() - start_time) * 1000.0)
-
-        # min_score_thresh = .50
-        # for i in range(boxes.shape[0]):
-        #     if scores is None or scores[i] > min_score_thresh:
-        #         class_name = self.category_index[classes[i]]['name']
-        #         if (class_name == 'Red'):
-        #             state = TrafficLight.RED
-        #         elif (class_name == 'Yellow'):
-        #             state = TrafficLight.YELLOW
-        #         elif (class_name == 'GREEN'):
-        #             state = TrafficLight.GREEN
-        #         else:
-        #             state = TrafficLight.UNKNOWN
 
         score_thresh = scores[0][0]
         if score_thresh < 0.5:
@@ -203,78 +159,79 @@ class TLClassifier(object):
 
         return state
 
-    def detect_color(self, image, boxes, scores, classes, max_boxes_to_draw=20, min_score_thresh=0.85, traffic_ligth_label=10):
-        im_width = image.shape[1]
-        im_height = image.shape[0]
+    def get_classification_batch_argmax(self, image_list, save_tl=False):
+            """Determines the color of the traffic light in an batch of images
+    
+            Args:
+                image_list (cv::Mat): list of images containing the traffic light
+    
+            Returns:
+                int: argmax of the IDs of traffic light color (specified in styx_msgs/TrafficLight)
+                uint8 GREEN=2
+                uint8 YELLOW=1
+                uint8 RED=0
+    
+            """
+            stateAcc = [0, 0, 0, 0]
+            imgs_preps = [self.prepare_trafficlight(image=i) for i in image_list]
+            for image in imgs_preps:
+                # reshape to [1, None, None, 3]
+                image_np_expanded = np.expand_dims(image, axis=0)
+                # Detect
+        
+                start_time = time.time()
+                boxes, scores, classes, num = self.session.run([self.detection_boxes,
+                                                                self.detection_scores,
+                                                                self.detection_classes,
+                                                                self.num_detections],
+                                                                feed_dict={self.image_tensor: image_np_expanded})
+                
+                print("Detection ms = ", (time.time() - start_time) * 1000.0)
 
-        imgs_crops = []
-        for i in range(min(max_boxes_to_draw, boxes.shape[0])):
-            if scores[i] > min_score_thresh and classes[i] == traffic_ligth_label:
-                ymin, xmin, ymax, xmax = tuple(boxes[i].tolist())
-
-                x1 = int(xmin * im_width)
-                x2 = int(xmax * im_width)
-                y1 = int(ymin * im_height)
-                y2 = int(ymax * im_height)
-
-                crop_img = image[y1:y2, x1:x2]
-                imgs_crops.append(crop_img)
-
-        if len(imgs_crops) > 1:
-            state = self.get_classification_batch_argmax(image_list=imgs_crops)
-        elif len(imgs_crops) == 1:
-            state = self.get_classification(image=imgs_crops[0])
-        else:
-            state = -1
-
-        return state
-
-    # def detect_traffic_lights(self, cv_image, model_name):
-    #
-    #     MODEL_FILE = model_name + '.tar.gz'
-    #
-    #     if path.isdir(MODEL_NAME) is False:
-    #         opener = urllib.request.URLopener()
-    #         opener.retrieve(DOWNLOAD_BASE + MODEL_FILE, MODEL_FILE)
-    #         tar_file = tarfile.open(MODEL_FILE)
-    #         for file in tar_file.getmembers():
-    #             file_name = os.path.basename(file.name)
-    #             if 'frozen_inference_graph.pb' in file_name:
-    #                 tar_file.extract(file, os.getcwd())
-    #
-    #
-    #     with self.detection_graph.as_default():
-    #         with tf.Session(graph=self.detection_graph) as sess:
-    #
-    #             # Definite input and output Tensors for detection_graph
-    #             # Each box represents a part of the image where a particular object was detected.
-    #             # return the level of confidence for each of the box detects.
-    #
-    #             image_tensor = self.detection_graph.get_tensor_by_name('image_tensor:0')
-    #             detection_boxes = self.detection_graph.get_tensor_by_name('detection_boxes:0')
-    #             detection_scores = self.detection_graph.get_tensor_by_name('detection_scores:0')
-    #             detection_classes = self.detection_graph.get_tensor_by_name('detection_classes:0')
-    #             num_detections = self.detection_graph.get_tensor_by_name('num_detections:0')
-    #
-    #             # for image_path in TEST_IMAGE_PATHS:
-    #             image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
-    #
-    #             # reshape to [1, None, None, 3]
-    #             image_np_expanded = np.expand_dims(image, axis=0)
-    #             # Detect
-    #             (boxes, scores, classes, num) = sess.run(
-    #                 [detection_boxes, detection_scores, detection_classes, num_detections],
-    #                 feed_dict={image_tensor: image_np_expanded})
-    #
-    #             state = self.detect_color(image, np.squeeze(boxes), np.squeeze(scores), np.squeeze(classes).astype(np.int32))
-    #
-    #             if (state == 0):
-    #                 print('RED', state)
-    #             elif (state == 1):
-    #                 print('YELLOW', state)
-    #             elif (state == 2):
-    #                 print('GREEN', state)
-    #             else:
-    #                 print('No traffic light detected', state)
-    #
-    #     return state
+                score_thresh = scores[0][0]
+                print(score_thresh)
+                if score_thresh < 0.5:
+                    state = 4  # TrafficLight.UNKNOWN
+                    stateAcc[3]+= 1
+                    print("TLC Unknown hit")
+                else:
+                    class_index = int(classes[0][0])
+                    print(self.categories)
+                    print(class_index)
+                    category = self.get_category(self.categories, class_index)
+                    if category is not None:
+                        print("%s, %s, %s", category['name'], score_thresh, class_index)
+        
+                        if class_index == 0:
+                            state = 4  # TrafficLight.UNKNOWN
+                            stateAcc[3]+= 1
+                            print("TLC Unknown hit")
+                        elif class_index == 1:
+                            state = 0  # TrafficLight.RED
+                            stateAcc[0]+= 1
+                            print("TLC Red hit")
+                        elif class_index == 2:
+                            state = 1  # TrafficLight.YELLOW
+                            stateAcc[1]+= 1
+                            print("TLC Yellow hit")
+                        else:
+                            state = 2 # TrafficLight.GREEN
+                            stateAcc[2]+= 1
+                            print("TLC Green hit")
+        
+                if save_tl:
+        
+                    if state == 0:
+                        label_state = 'RED'
+                    elif state == 1:
+                        label_state = 'YELLOW'
+                    elif state == 2:
+                        label_state = 'GREEN'
+                    else:
+                        label_state = 'UNKNOWN'
+        
+                    self.save_origin_image(image, boxes, classes, scores, self.category_index, label_state)
+                    
+            max_index = stateAcc.index(max(stateAcc))
+    
+            return max_index
