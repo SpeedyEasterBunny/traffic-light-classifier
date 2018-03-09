@@ -1,0 +1,26 @@
+name: tlc
+channels:
+- defaults
+dependencies:
+- pip=9.0.1=py36_5
+- python=3.6.4=hc3d631a_1
+- readline=7.0=ha6073c6_4
+- setuptools=38.5.1=py36_0
+- tk=8.6.7=hc745277_3
+- wheel=0.30.0=py36hfd4bba0_1
+- pip:
+  - Flask==0.11.1
+  - attrdict==2.0.0
+  - eventlet==0.19.0
+  - python-socketio==1.6.1
+  - numpy==1.13.1
+  - Pillow==2.2.1
+  - scipy==0.19.1
+  - keras==2.0.8
+  - tensorflow-gpu==1.3.0
+  - h5py==2.6.0
+  - scikit-learn==0.19.1
+  - joblib==0.11.00
+  - opencv-python==3.4.0.12
+  - matplotlib==2.2.0
+  - psutil==5.4.3
