@@ -43,14 +43,3 @@ cd code
 python main.py
 ```
 
-## Test Log
-
-    March 8th
-
-    1. prepare_trafficlight
-        conflict use for main and tl_classifier_test
-        DONE fixed using a if sentence
-    2. tlc.gc.predict()
-        AttributeError: 'TLClassifier' object has no attribute 'gc'
-        TODO: fix this
-
